@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
+	"github.com/lyonmu/myebpf/ebpf/flow"
 )
 
 // FlowEvent 对应 eBPF 中的 flow_event 结构体
@@ -24,6 +25,20 @@ type FlowEvent struct {
 	DstPort  uint16
 	Protocol uint8
 	Pad      [3]byte
+}
+
+func (e FlowEvent) String() string {
+	protocol := "UNK"
+	switch e.Protocol {
+	case 6:
+		protocol = "TCP"
+	case 17:
+		protocol = "UDP"
+	}
+	return fmt.Sprintf("%s %s:%d -> %s:%d",
+		protocol,
+		intToIP(e.SrcIP), ntohs(e.SrcPort),
+		intToIP(e.DstIP), ntohs(e.DstPort))
 }
 
 // uint32 转 net.IP
@@ -53,8 +68,8 @@ func main() {
 	}
 
 	// Load the compiled eBPF ELF and load it into the kernel.
-	var objs flowObjects
-	if err := loadFlowObjects(&objs, nil); err != nil {
+	var objs flow.FlowObjects
+	if err := flow.LoadFlowObjects(&objs, nil); err != nil {
 		log.Fatal("Loading eBPF objects:", err)
 	}
 	defer objs.Close()
@@ -105,17 +120,7 @@ func main() {
 				continue
 			}
 
-			protocol := "UNK"
-			if event.Protocol == 6 {
-				protocol = "TCP"
-			} else if event.Protocol == 17 {
-				protocol = "UDP"
-			}
-
-			fmt.Printf("%s %s:%d -> %s:%d\n",
-				protocol,
-				intToIP(event.SrcIP), ntohs(event.SrcPort),
-				intToIP(event.DstIP), ntohs(event.DstPort))
+			log.Println(event)
 		}
 	}()
 
